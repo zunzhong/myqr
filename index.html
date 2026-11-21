@@ -103,16 +103,46 @@
       aspect-ratio: 1 / 1;
       border-radius: 22px;
       overflow: hidden;
-      background: #020617;
+      background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%);
       border: 1px solid var(--border);
       box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5);
     }
 
+    /* Ẩn video khi chưa có stream để tránh Android WebView hiện nút Play (▶) xám */
     video {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      display: none;
+    }
+
+    video.active {
       display: block;
+    }
+
+    .cam-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--muted);
+      padding: 24px;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    .cam-placeholder.hidden {
+      display: none;
+    }
+
+    .cam-placeholder svg {
+      width: 42px;
+      height: 42px;
+      opacity: 0.65;
+      color: var(--accent);
     }
 
     .overlay {
@@ -122,7 +152,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: radial-gradient(circle, transparent 42%, rgba(2, 6, 23, 0.58) 76%);
+      background: radial-gradient(circle, transparent 42%, rgba(2, 6, 23, 0.52) 76%);
     }
 
     .scan-box {
@@ -130,7 +160,7 @@
       width: 68%;
       height: 68%;
       border-radius: 18px;
-      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
     }
 
     .corner {
@@ -147,6 +177,7 @@
     .br { bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-bottom-right-radius: 14px; }
 
     .laser {
+      display: none;
       position: absolute;
       left: 8px;
       right: 8px;
@@ -154,6 +185,10 @@
       background: linear-gradient(90deg, transparent, var(--accent), transparent);
       box-shadow: 0 0 12px 2px var(--accent-glow);
       animation: scanMove 2.2s ease-in-out infinite;
+    }
+
+    .laser.active {
+      display: block;
     }
 
     @keyframes scanMove {
@@ -263,6 +298,21 @@
       gap: 6px;
     }
 
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 9px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .result-box {
       display: none;
       background: var(--card);
@@ -317,6 +367,10 @@
 
     <div class="scanner-card">
       <video id="video" playsinline muted autoplay></video>
+      <div class="cam-placeholder" id="camPlaceholder">
+        <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span id="placeholderText">Đang chuẩn bị Camera...</span>
+      </div>
       <div class="overlay">
         <div class="scan-box">
           <span class="corner tl"></span>
@@ -334,10 +388,11 @@
     </div>
 
     <div class="fallback-box" id="fallbackBox">
-      <div id="fallbackMsg">Không thể mở camera trực tiếp. Nếu bạn đang ở cửa sổ đăng nhập WiFi thu nhỏ, hãy mở bằng trình duyệt Chrome hoặc Safari.</div>
+      <div id="fallbackMsg"></div>
       <div class="fallback-actions">
-        <button class="btn-primary" onclick="startCamera()">Thử lại</button>
         <a class="btn-primary" id="chromeIntentBtn" href="#">Mở bằng Chrome</a>
+        <label class="btn-secondary" for="fileInput" style="cursor:pointer;">Chọn ảnh QR</label>
+        <button class="btn-secondary" onclick="startCamera()">Thử lại</button>
       </div>
     </div>
 
@@ -366,6 +421,9 @@
   <script src="jsQR.js"></script>
   <script>
     const video = document.getElementById('video');
+    const camPlaceholder = document.getElementById('camPlaceholder');
+    const placeholderText = document.getElementById('placeholderText');
+    const laser = document.getElementById('laser');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const statusPill = document.getElementById('statusPill');
@@ -376,7 +434,12 @@
     const resultBox = document.getElementById('resultBox');
     const chromeIntentBtn = document.getElementById('chromeIntentBtn');
 
-    chromeIntentBtn.href = `intent://${location.host}${location.pathname}#Intent;scheme=https;package=com.android.chrome;end`;
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isIOS) {
+      chromeIntentBtn.style.display = 'none';
+    } else {
+      chromeIntentBtn.href = `intent://${location.host}${location.pathname}${location.search}#Intent;scheme=https;package=com.android.chrome;end`;
+    }
 
     let stream = null;
     let facingMode = 'environment';
@@ -428,6 +491,9 @@
 
     function stopCamera() {
       scanning = false;
+      laser.classList.remove('active');
+      video.classList.remove('active');
+      camPlaceholder.classList.remove('hidden');
       if (rafId) cancelAnimationFrame(rafId);
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
@@ -438,16 +504,29 @@
       btnTorch.disabled = true;
     }
 
+    function showCameraError() {
+      setStatus('Không thể truy cập Camera tại cửa sổ này', 'error');
+      placeholderText.textContent = isIOS
+        ? 'Cửa sổ đăng nhập nhanh iOS không hỗ trợ Camera'
+        : 'Cửa sổ đăng nhập nhanh không cấp quyền Camera';
+
+      if (isIOS) {
+        fallbackMsg.innerHTML = 'Trên <b>iPhone</b>, cửa sổ đăng nhập tự động chặn Camera. Hãy bấm <b>Hủy</b> ở góc trên → chọn <b>Sử dụng không cần Internet</b> → mở <b>Safari</b> hoặc chọn ảnh QR đã chụp.';
+      } else {
+        fallbackMsg.innerHTML = 'Trình duyệt thu nhỏ của WiFi đang chặn Camera. Hãy bấm <b>Mở bằng Chrome</b> bên dưới để quét mã hoặc chọn ảnh từ thư viện.';
+      }
+      fallbackBox.style.display = 'block';
+    }
+
     async function startCamera() {
       stopCamera();
       fallbackBox.style.display = 'none';
       resultBox.style.display = 'none';
+      placeholderText.textContent = 'Đang khởi động camera...';
       setStatus('Đang khởi động camera...');
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setStatus('Trình duyệt không hỗ trợ Camera trực tiếp', 'error');
-        fallbackMsg.textContent = 'Trình duyệt hiện tại không cấp quyền Camera (hoặc đang chạy trong cửa sổ Captive Portal thu nhỏ). Hãy mở bằng Chrome/Safari hoặc dùng nút "Chọn ảnh QR".';
-        fallbackBox.style.display = 'block';
+        showCameraError();
         return;
       }
 
@@ -464,6 +543,10 @@
         video.srcObject = stream;
         await video.play();
 
+        video.classList.add('active');
+        camPlaceholder.classList.add('hidden');
+        laser.classList.add('active');
+
         const track = stream.getVideoTracks()[0];
         if (track && typeof track.getCapabilities === 'function') {
           const caps = track.getCapabilities();
@@ -476,9 +559,7 @@
         setStatus('Sẵn sàng quét mã QR...');
         scanLoop();
       } catch (err) {
-        setStatus('Không thể truy cập Camera', 'error');
-        fallbackMsg.textContent = 'Vui lòng cấp quyền Camera cho trình duyệt, hoặc bấm "Chọn ảnh QR" nếu bạn đã chụp ảnh mã QR.';
-        fallbackBox.style.display = 'block';
+        showCameraError();
       }
     }
 
@@ -505,14 +586,13 @@
       if (!text) return;
       stopCamera();
       playBeep();
-      setStatus('Đã quét thành công! Đang xử lý...', 'success');
+      setStatus('Đã quét thành công! Đang đăng nhập...', 'success');
 
       const trimmed = text.trim();
       const params = new URLSearchParams(window.location.search);
       const loginBase = params.get('login');
 
       if (/^https?:\/\//i.test(trimmed)) {
-        setStatus('Đang đăng nhập WiFi...', 'success');
         window.location.href = trimmed;
         return;
       }
@@ -569,27 +649,63 @@
       rafId = requestAnimationFrame(scanLoop);
     }
 
-    function scanImageFile(event) {
+    async function scanImageFile(event) {
       const file = event.target.files[0];
       if (!file) return;
+      setStatus('Đang đọc mã QR từ ảnh...');
+
+      const objUrl = URL.createObjectURL(file);
       const img = new Image();
-      img.onload = function () {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0, img.width, img.height);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        if (typeof jsQR === 'function') {
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'attemptBoth'
-          });
-          if (code && code.data) {
-            handleDecoded(code.data);
-          } else {
-            setStatus('Không tìm thấy mã QR trong ảnh', 'error');
+
+      img.onload = async function () {
+        try {
+          if (detector) {
+            try {
+              const barcodes = await detector.detect(img);
+              if (barcodes.length > 0 && barcodes[0].rawValue) {
+                handleDecoded(barcodes[0].rawValue);
+                return;
+              }
+            } catch (e) {}
           }
+
+          // Thu nhỏ ảnh lớn về tối đa 1200px để jsQR quét nhanh và chính xác hơn
+          const maxDim = 1200;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            const scale = maxDim / Math.max(w, h);
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+          }
+
+          canvas.width = w;
+          canvas.height = h;
+          ctx.drawImage(img, 0, 0, w, h);
+          const imageData = ctx.getImageData(0, 0, w, h);
+
+          if (typeof jsQR === 'function') {
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: 'attemptBoth'
+            });
+            if (code && code.data) {
+              handleDecoded(code.data);
+              return;
+            }
+          }
+
+          setStatus('Không tìm thấy mã QR trong ảnh đã chọn', 'error');
+        } finally {
+          URL.revokeObjectURL(objUrl);
         }
       };
-      img.src = URL.createObjectURL(file);
+
+      img.onerror = function () {
+        URL.revokeObjectURL(objUrl);
+        setStatus('Không thể đọc file ảnh này', 'error');
+      };
+
+      img.src = objUrl;
       event.target.value = '';
     }
 
