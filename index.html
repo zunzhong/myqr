@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>WiFi QR Scanner - ZunZhong</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: rgba(30, 41, 59, 0.78);
+      --border: rgba(148, 163, 184, 0.18);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.45);
+      --success: #22c55e;
+      --danger: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at top, #1e293b 0%, #0f172a 65%, #020617 100%);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin: auto 0;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #0ea5e9, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 18px rgba(14, 165, 233, 0.3);
+      flex-shrink: 0;
+    }
+
+    .brand-title h1 {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .brand-title p {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .btn-back {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      backdrop-filter: blur(10px);
+    }
+
+    .scanner-card {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 22px;
+      overflow: hidden;
+      background: #020617;
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5);
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle, transparent 42%, rgba(2, 6, 23, 0.58) 76%);
+    }
+
+    .scan-box {
+      position: relative;
+      width: 68%;
+      height: 68%;
+      border-radius: 18px;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+    }
+
+    .corner {
+      position: absolute;
+      width: 26px;
+      height: 26px;
+      border-color: var(--accent);
+      border-style: solid;
+      border-width: 0;
+    }
+    .tl { top: -2px; left: -2px; border-top-width: 4px; border-left-width: 4px; border-top-left-radius: 14px; }
+    .tr { top: -2px; right: -2px; border-top-width: 4px; border-right-width: 4px; border-top-right-radius: 14px; }
+    .bl { bottom: -2px; left: -2px; border-bottom-width: 4px; border-left-width: 4px; border-bottom-left-radius: 14px; }
+    .br { bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-bottom-right-radius: 14px; }
+
+    .laser {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      box-shadow: 0 0 12px 2px var(--accent-glow);
+      animation: scanMove 2.2s ease-in-out infinite;
+    }
+
+    @keyframes scanMove {
+      0%, 100% { top: 10%; opacity: 0.7; }
+      50% { top: 88%; opacity: 1; }
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+      backdrop-filter: blur(12px);
+      text-align: center;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      flex-shrink: 0;
+    }
+
+    .status-pill.success .status-dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .status-pill.success { color: #dcfce7; border-color: rgba(34, 197, 94, 0.35); }
+    .status-pill.error .status-dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+    .status-pill.error { color: #fee2e2; border-color: rgba(239, 68, 68, 0.35); }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .ctrl-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 12px 8px;
+      border-radius: 14px;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+      backdrop-filter: blur(12px);
+      text-decoration: none;
+    }
+
+    .ctrl-btn:active {
+      transform: scale(0.96);
+    }
+
+    .ctrl-btn.active {
+      background: rgba(56, 189, 248, 0.16);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .ctrl-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .fallback-box {
+      display: none;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #fecaca;
+    }
+
+    .fallback-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+      color: #fff;
+      border: none;
+      padding: 9px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .result-box {
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      word-break: break-all;
+      font-size: 13px;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 11.5px;
+      color: #64748b;
+      margin-top: 12px;
+    }
+
+    svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" style="color:#fff">
+            <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+            <rect x="7" y="7" width="4" height="4" rx="1"/>
+            <rect x="13" y="7" width="4" height="4" rx="1"/>
+            <rect x="7" y="13" width="4" height="4" rx="1"/>
+            <path d="M13 13h4v4h-4z"/>
+          </svg>
+        </div>
+        <div class="brand-title">
+          <h1>WiFi QR Scanner</h1>
+          <p>Đưa mã QR Voucher vào khung hình</p>
+        </div>
+      </div>
+      <button class="btn-back" onclick="goBack()">
+        <svg viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Quay lại
+      </button>
+    </div>
+
+    <div class="scanner-card">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="overlay">
+        <div class="scan-box">
+          <span class="corner tl"></span>
+          <span class="corner tr"></span>
+          <span class="corner bl"></span>
+          <span class="corner br"></span>
+          <div class="laser" id="laser"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-pill" id="statusPill">
+      <span class="status-dot"></span>
+      <span id="statusText">Đang khởi động camera...</span>
+    </div>
+
+    <div class="fallback-box" id="fallbackBox">
+      <div id="fallbackMsg">Không thể mở camera trực tiếp. Nếu bạn đang ở cửa sổ đăng nhập WiFi thu nhỏ, hãy mở bằng trình duyệt Chrome hoặc Safari.</div>
+      <div class="fallback-actions">
+        <button class="btn-primary" onclick="startCamera()">Thử lại</button>
+        <a class="btn-primary" id="chromeIntentBtn" href="#">Mở bằng Chrome</a>
+      </div>
+    </div>
+
+    <div class="result-box" id="resultBox"></div>
+
+    <div class="controls">
+      <button class="ctrl-btn" id="btnTorch" onclick="toggleTorch()" disabled>
+        <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <span>Đèn Flash</span>
+      </button>
+      <button class="ctrl-btn" id="btnSwitch" onclick="switchCamera()">
+        <svg viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        <span>Đổi Camera</span>
+      </button>
+      <label class="ctrl-btn" for="fileInput">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        <span>Chọn ảnh QR</span>
+      </label>
+      <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="scanImageFile(event)" />
+    </div>
+  </div>
+
+  <div class="footer">ZunZhong Hotspot QR Scanner</div>
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <script src="jsQR.js"></script>
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const statusPill = document.getElementById('statusPill');
+    const statusText = document.getElementById('statusText');
+    const fallbackBox = document.getElementById('fallbackBox');
+    const fallbackMsg = document.getElementById('fallbackMsg');
+    const btnTorch = document.getElementById('btnTorch');
+    const resultBox = document.getElementById('resultBox');
+    const chromeIntentBtn = document.getElementById('chromeIntentBtn');
+
+    chromeIntentBtn.href = `intent://${location.host}${location.pathname}#Intent;scheme=https;package=com.android.chrome;end`;
+
+    let stream = null;
+    let facingMode = 'environment';
+    let torchOn = false;
+    let scanning = false;
+    let rafId = null;
+    let detector = null;
+
+    if ('BarcodeDetector' in window) {
+      try {
+        detector = new BarcodeDetector({ formats: ['qr_code'] });
+      } catch (e) {
+        detector = null;
+      }
+    }
+
+    function setStatus(msg, type = '') {
+      statusPill.className = 'status-pill ' + type;
+      statusText.textContent = msg;
+    }
+
+    function goBack() {
+      const params = new URLSearchParams(window.location.search);
+      const backUrl = params.get('back');
+      if (backUrl) {
+        window.location.href = backUrl;
+      } else if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = 'http://192.168.88.1/login';
+      }
+    }
+
+    function playBeep() {
+      try {
+        if (navigator.vibrate) navigator.vibrate(100);
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.12);
+      } catch (e) {}
+    }
+
+    function stopCamera() {
+      scanning = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      torchOn = false;
+      btnTorch.classList.remove('active');
+      btnTorch.disabled = true;
+    }
+
+    async function startCamera() {
+      stopCamera();
+      fallbackBox.style.display = 'none';
+      resultBox.style.display = 'none';
+      setStatus('Đang khởi động camera...');
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus('Trình duyệt không hỗ trợ Camera trực tiếp', 'error');
+        fallbackMsg.textContent = 'Trình duyệt hiện tại không cấp quyền Camera (hoặc đang chạy trong cửa sổ Captive Portal thu nhỏ). Hãy mở bằng Chrome/Safari hoặc dùng nút "Chọn ảnh QR".';
+        fallbackBox.style.display = 'block';
+        return;
+      }
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facingMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        await video.play();
+
+        const track = stream.getVideoTracks()[0];
+        if (track && typeof track.getCapabilities === 'function') {
+          const caps = track.getCapabilities();
+          if (caps.torch) {
+            btnTorch.disabled = false;
+          }
+        }
+
+        scanning = true;
+        setStatus('Sẵn sàng quét mã QR...');
+        scanLoop();
+      } catch (err) {
+        setStatus('Không thể truy cập Camera', 'error');
+        fallbackMsg.textContent = 'Vui lòng cấp quyền Camera cho trình duyệt, hoặc bấm "Chọn ảnh QR" nếu bạn đã chụp ảnh mã QR.';
+        fallbackBox.style.display = 'block';
+      }
+    }
+
+    async function toggleTorch() {
+      if (!stream) return;
+      const track = stream.getVideoTracks()[0];
+      if (!track) return;
+      try {
+        torchOn = !torchOn;
+        await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+        btnTorch.classList.toggle('active', torchOn);
+      } catch (e) {
+        torchOn = false;
+        btnTorch.disabled = true;
+      }
+    }
+
+    function switchCamera() {
+      facingMode = facingMode === 'environment' ? 'user' : 'environment';
+      startCamera();
+    }
+
+    function handleDecoded(text) {
+      if (!text) return;
+      stopCamera();
+      playBeep();
+      setStatus('Đã quét thành công! Đang xử lý...', 'success');
+
+      const trimmed = text.trim();
+      const params = new URLSearchParams(window.location.search);
+      const loginBase = params.get('login');
+
+      if (/^https?:\/\//i.test(trimmed)) {
+        setStatus('Đang đăng nhập WiFi...', 'success');
+        window.location.href = trimmed;
+        return;
+      }
+
+      if (loginBase) {
+        const sep = loginBase.includes('?') ? '&' : '?';
+        window.location.href = `${loginBase}${sep}username=${encodeURIComponent(trimmed)}&password=${encodeURIComponent(trimmed)}`;
+        return;
+      }
+
+      resultBox.innerHTML = `
+        <div style="margin-bottom:8px;color:#94a3b8;">Nội dung mã QR:</div>
+        <div style="font-weight:600;color:#fff;margin-bottom:10px;">${escapeHtml(trimmed)}</div>
+        <button class="btn-primary" onclick="startCamera()">Quét mã khác</button>
+      `;
+      resultBox.style.display = 'block';
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+    }
+
+    async function scanLoop() {
+      if (!scanning) return;
+
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (detector) {
+          try {
+            const barcodes = await detector.detect(video);
+            if (barcodes.length > 0 && barcodes[0].rawValue) {
+              handleDecoded(barcodes[0].rawValue);
+              return;
+            }
+          } catch (e) {
+            detector = null;
+          }
+        }
+
+        if (typeof jsQR === 'function') {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert'
+          });
+          if (code && code.data) {
+            handleDecoded(code.data);
+            return;
+          }
+        }
+      }
+
+      rafId = requestAnimationFrame(scanLoop);
+    }
+
+    function scanImageFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = function () {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0, img.width, img.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        if (typeof jsQR === 'function') {
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'attemptBoth'
+          });
+          if (code && code.data) {
+            handleDecoded(code.data);
+          } else {
+            setStatus('Không tìm thấy mã QR trong ảnh', 'error');
+          }
+        }
+      };
+      img.src = URL.createObjectURL(file);
+      event.target.value = '';
+    }
+
+    startCamera();
+  </script>
+</body>
+</html>
